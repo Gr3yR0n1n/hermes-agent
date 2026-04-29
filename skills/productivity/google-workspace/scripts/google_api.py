@@ -560,6 +560,41 @@ def calendar_delete(args):
     print(json.dumps({"status": "deleted", "eventId": args.event_id}))
 
 
+
+def calendar_accept(args):
+    service = build_service("calendar", "v3")
+    event = service.events().get(calendarId=args.calendar, eventId=args.event_id).execute()
+
+    attendees = event.get("attendees", [])
+    accepted = False
+    for attendee in attendees:
+        if attendee.get("self"):
+            attendee["responseStatus"] = "accepted"
+            accepted = True
+            break
+
+    if not accepted:
+        attendees.append({"email": args.email, "responseStatus": "accepted", "self": True})
+
+    result = service.events().patch(
+        calendarId=args.calendar,
+        eventId=args.event_id,
+        body={"attendees": attendees},
+        sendUpdates="all",
+    ).execute()
+
+    print(json.dumps({
+        "status": "accepted",
+        "id": result["id"],
+        "summary": result.get("summary", ""),
+        "start": result.get("start", {}).get("dateTime", result.get("start", {}).get("date", "")),
+        "end": result.get("end", {}).get("dateTime", result.get("end", {}).get("date", "")),
+        "location": result.get("location", ""),
+        "description": result.get("description", ""),
+        "organizer": result.get("organizer", {}).get("email", ""),
+    }, indent=2))
+
+
 # =========================================================================
 # Drive
 # =========================================================================
@@ -1114,6 +1149,12 @@ def main():
     p.add_argument("event_id")
     p.add_argument("--calendar", default="primary")
     p.set_defaults(func=calendar_delete)
+
+    p = cal_sub.add_parser("accept")
+    p.add_argument("event_id", help="Calendar event ID to accept")
+    p.add_argument("--calendar", default="primary")
+    p.add_argument("--email", default="", help="Your email address (used if self=true attendee not found)")
+    p.set_defaults(func=calendar_accept)
 
     # --- Drive ---
     drv = sub.add_parser("drive")
