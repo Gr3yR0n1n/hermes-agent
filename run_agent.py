@@ -1685,6 +1685,10 @@ class AIAgent:
         
         # Cached system prompt -- built once per session, only rebuilt on compression
         self._cached_system_prompt: Optional[str] = None
+        # Session metadata (timestamp, session ID, model) -- stored separately so
+        # it's appended AFTER all stable content at API-call time, keeping the
+        # stable prefix (SOUL.md + context) cacheable across sessions in vLLM.
+        self._session_meta_str: str = ""
         
         # Filesystem checkpoint manager (transparent — not a tool)
         from tools.checkpoint_manager import CheckpointManager
@@ -5254,16 +5258,22 @@ class AIAgent:
             if context_files_prompt:
                 prompt_parts.append(context_files_prompt)
 
-        from hermes_time import now as _hermes_now
-        now = _hermes_now()
-        timestamp_line = f"Conversation started: {now.strftime('%A, %B %d, %Y %I:%M %p')}"
-        if self.pass_session_id and self.session_id:
-            timestamp_line += f"\nSession ID: {self.session_id}"
-        if self.model:
-            timestamp_line += f"\nModel: {self.model}"
-        if self.provider:
-            timestamp_line += f"\nProvider: {self.provider}"
-        prompt_parts.append(timestamp_line)
+        # Capture timestamp once (first build only) so rebuildson compression
+        # reuse the original session start time rather than the rebuild time.
+        if not self._session_meta_str:
+            from hermes_time import now as _hermes_now
+            now = _hermes_now()
+            _meta = f"Conversation started: {now.strftime('%A, %B %d, %Y %I:%M %p')}"
+            if self.pass_session_id and self.session_id:
+                _meta += f"\nSession ID: {self.session_id}"
+            if self.model:
+                _meta += f"\nModel: {self.model}"
+            if self.provider:
+                _meta += f"\nProvider: {self.provider}"
+            self._session_meta_str = _meta
+        # Note: _session_meta_str is NOT appended to prompt_parts here.
+        # It is injected at API-call time, after all stable content, so
+        # the entire stable prefix (SOUL.md + context) can be cached by vLLM.
 
         # Alibaba Coding Plan API always returns "glm-4.7" as model name regardless
         # of the requested model. Inject explicit model identity into the system prompt
@@ -10605,6 +10615,8 @@ class AIAgent:
             effective_system = self._cached_system_prompt or ""
             if self.ephemeral_system_prompt:
                 effective_system = (effective_system + "\n\n" + self.ephemeral_system_prompt).strip()
+            if self._session_meta_str:
+                effective_system = (effective_system + "\n\n" + self._session_meta_str).strip()
             if effective_system:
                 api_messages = [{"role": "system", "content": effective_system}] + api_messages
             if self.prefill_messages:
@@ -11351,6 +11363,10 @@ class AIAgent:
             effective_system = active_system_prompt or ""
             if self.ephemeral_system_prompt:
                 effective_system = (effective_system + "\n\n" + self.ephemeral_system_prompt).strip()
+            # Session metadata (timestamp, session ID, model) is appended last so all
+            # stable content (SOUL.md + context) precedes it — maximising vLLM prefix cache hits.
+            if self._session_meta_str:
+                effective_system = (effective_system + "\n\n" + self._session_meta_str).strip()
             # NOTE: Plugin context from pre_llm_call hooks is injected into the
             # user message (see injection block above), NOT the system prompt.
             # This is intentional — system prompt modifications break the prompt
