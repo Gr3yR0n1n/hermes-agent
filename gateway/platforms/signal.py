@@ -222,6 +222,9 @@ class SignalAdapter(BasePlatformAdapter):
 
         # Normalize account for self-message filtering
         self._account_normalized = self.account.strip()
+        # Also track self ACI UUID — signal-cli sometimes omits sourceNumber and
+        # sends only sourceUuid, which the phone-number comparison misses.
+        self._self_uuid: Optional[str] = None
 
         # Track recently sent message timestamps to prevent echo-back loops
         # in Note to Self / self-chat mode (mirrors WhatsApp recentlySentIds)
@@ -271,6 +274,8 @@ class SignalAdapter(BasePlatformAdapter):
                 logger.error("Signal: cannot reach signal-cli at %s: %s", self.http_url, e)
                 return False
 
+            self._self_uuid = await self._resolve_self_uuid()
+
             self._running = True
             self._last_sse_activity = time.time()
             self._sse_task = asyncio.create_task(self._sse_listener())
@@ -285,6 +290,29 @@ class SignalAdapter(BasePlatformAdapter):
                     self.client = None
                 if lock_acquired:
                     self._release_platform_lock()
+
+    async def _resolve_self_uuid(self) -> Optional[str]:
+        """Read the ACI UUID for this account from the signal-cli data directory."""
+        import json as _json
+        from pathlib import Path as _Path
+        try:
+            base = _Path.home() / ".local" / "share" / "signal-cli" / "data"
+            accounts_file = base / "accounts.json"
+            if not accounts_file.exists():
+                return None
+            accounts_data = _json.loads(accounts_file.read_text())
+            for acct in accounts_data.get("accounts", []):
+                if acct.get("number") == self._account_normalized:
+                    acct_file = base / acct["path"]
+                    if acct_file.exists():
+                        acct_data = _json.loads(acct_file.read_text())
+                        uuid = acct_data.get("aciAccountData", {}).get("serviceId")
+                        if uuid:
+                            logger.info("Signal: resolved self UUID %s", uuid)
+                            return uuid
+        except Exception as e:
+            logger.debug("Signal: could not resolve self UUID: %s", e)
+        return None
 
     async def disconnect(self) -> None:
         """Stop SSE listener and clean up."""
@@ -471,8 +499,14 @@ class SignalAdapter(BasePlatformAdapter):
             logger.debug("Signal: ignoring envelope with no sender")
             return
 
-        # Self-message filtering — prevent reply loops (but allow Note to Self)
-        if self._account_normalized and sender == self._account_normalized and not is_note_to_self:
+        # Self-message filtering — prevent reply loops (but allow Note to Self).
+        # Check both phone number and ACI UUID: signal-cli sometimes omits
+        # sourceNumber and sends only sourceUuid for self-originating envelopes.
+        is_self = (
+            (self._account_normalized and sender == self._account_normalized)
+            or (self._self_uuid and sender_uuid == self._self_uuid)
+        )
+        if is_self and not is_note_to_self:
             return
 
         # Filter stories
