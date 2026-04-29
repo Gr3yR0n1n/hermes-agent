@@ -59,8 +59,8 @@ logger = logging.getLogger(__name__)
 SIGNAL_MAX_ATTACHMENT_SIZE = 100 * 1024 * 1024  # 100 MB
 MAX_MESSAGE_LENGTH = 8000  # Signal message size limit
 TYPING_INTERVAL = 8.0  # seconds between typing indicator refreshes
-SSE_RETRY_DELAY_INITIAL = 2.0
-SSE_RETRY_DELAY_MAX = 60.0
+SSE_RETRY_DELAY_INITIAL = 0.5
+SSE_RETRY_DELAY_MAX = 30.0
 HEALTH_CHECK_INTERVAL = 30.0  # seconds between health checks
 HEALTH_CHECK_STALE_THRESHOLD = 120.0  # seconds without SSE activity before concern
 
