@@ -13,7 +13,7 @@ SCHEMA = {
     "description": (
         "Access Google Workspace (Calendar, Gmail, Drive) "
         "Use service='calendar' with actions: list, create, accept, delete. "
-        "Use service='gmail' with actions: search, get, send, reply. "
+        "Use service='gmail' with actions: search, get, send, reply, labels, modify. "
         "Use service='drive' with actions: search."
     ),
     "parameters": {
@@ -28,7 +28,7 @@ SCHEMA = {
                 "type": "string",
                 "description": (
                     "calendar: list, create, accept, delete. "
-                    "gmail: search, get, send, reply. "
+                    "gmail: search, get, send, reply, labels, modify. "
                     "drive: search."
                 ),
             },
@@ -44,6 +44,8 @@ SCHEMA = {
                     "gmail get: {message_id: 'abc123'}\n"
                     "gmail send: {to: 'user@example.com', subject: 'Hi', body: 'Hello'}\n"
                     "gmail reply: {message_id: 'abc123', body: 'Thanks'}\n"
+                    "gmail labels: {}  (list all labels and their IDs)\n"
+                    "gmail modify: {message_id: 'abc123', add_labels: 'LABEL_ID1,LABEL_ID2', remove_labels: 'LABEL_ID3'}\n"
                     "drive search: {query: 'budget report'}"
                 ),
             },
@@ -127,6 +129,18 @@ def _build_cmd(service: str, action: str, args: dict) -> list[str]:
     # gmail reply
     elif service == "gmail" and action == "reply":
         cmd += [a["message_id"], "--body", a["body"]]
+
+    # gmail labels (no extra args — lists all labels)
+    elif service == "gmail" and action == "labels":
+        pass
+
+    # gmail modify
+    elif service == "gmail" and action == "modify":
+        cmd.append(a["message_id"])
+        if a.get("add_labels"):
+            cmd += ["--add-labels", a["add_labels"]]
+        if a.get("remove_labels"):
+            cmd += ["--remove-labels", a["remove_labels"]]
 
     # drive search
     elif service == "drive" and action == "search":
