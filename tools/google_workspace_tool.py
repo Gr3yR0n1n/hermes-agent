@@ -161,7 +161,7 @@ from tools.registry import registry
 
 registry.register(
     name="google_workspace",
-    toolset="core",
+    toolset="messaging",
     schema=SCHEMA,
     handler=lambda args, **kw: google_workspace(
         service=args["service"],

@@ -101,7 +101,7 @@ from tools.registry import registry
 
 registry.register(
     name="qr_code",
-    toolset="core",
+    toolset="messaging",
     schema=QR_SCHEMA,
     handler=lambda args, **kw: qr_tool(url=args["url"]),
     emoji="📷",
