@@ -13,7 +13,7 @@ SCHEMA = {
     "description": (
         "Access Google Workspace (Calendar, Gmail, Drive) "
         "Use service='calendar' with actions: list, create, accept, delete. "
-        "Use service='gmail' with actions: search, get, send, reply, labels, modify. "
+        "Use service='gmail' with actions: search, get, send, reply, labels, create_label, modify. "
         "Use service='drive' with actions: search."
     ),
     "parameters": {
@@ -28,7 +28,7 @@ SCHEMA = {
                 "type": "string",
                 "description": (
                     "calendar: list, create, accept, delete. "
-                    "gmail: search, get, send, reply, labels, modify. "
+                    "gmail: search, get, send, reply, labels, create_label, modify. "
                     "drive: search."
                 ),
             },
@@ -45,6 +45,7 @@ SCHEMA = {
                     "gmail send: {to: 'user@example.com', subject: 'Hi', body: 'Hello'}\n"
                     "gmail reply: {message_id: 'abc123', body: 'Thanks'}\n"
                     "gmail labels: {}  (list all labels and their IDs)\n"
+                    "gmail create_label: {name: 'LabelName'}  (create a new label, returns its ID)\n"
                     "gmail modify: {message_id: 'abc123', add_labels: 'LABEL_ID1,LABEL_ID2', remove_labels: 'LABEL_ID3'}\n"
                     "drive search: {query: 'budget report'}"
                 ),
@@ -133,6 +134,11 @@ def _build_cmd(service: str, action: str, args: dict) -> list[str]:
     # gmail labels (no extra args — lists all labels)
     elif service == "gmail" and action == "labels":
         pass
+
+    # gmail create_label
+    elif service == "gmail" and action == "create_label":
+        cmd[3] = "create-label"  # google_api.py uses hyphen
+        cmd.append(a["name"])
 
     # gmail modify
     elif service == "gmail" and action == "modify":

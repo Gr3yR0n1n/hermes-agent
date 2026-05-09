@@ -457,6 +457,24 @@ def gmail_modify(args):
 # =========================================================================
 
 
+
+def gmail_create_label(args):
+    body = {"name": args.name, "labelListVisibility": "labelShow", "messageListVisibility": "show"}
+
+    if _gws_binary():
+        result = _run_gws(
+            ["gmail", "users", "labels", "create"],
+            params={"userId": "me"},
+            body=body,
+        )
+        print(json.dumps({"id": result["id"], "name": result["name"]}, indent=2))
+        return
+
+    service = build_service("gmail", "v1")
+    result = service.users().labels().create(userId="me", body=body).execute()
+    print(json.dumps({"id": result["id"], "name": result["name"]}, indent=2))
+
+
 def calendar_list(args):
     now = datetime.now(timezone.utc)
     time_min = _datetime_with_timezone(args.start or now.isoformat())
@@ -1123,6 +1141,10 @@ def main():
     p.add_argument("--add-labels", default="", help="Comma-separated label IDs to add")
     p.add_argument("--remove-labels", default="", help="Comma-separated label IDs to remove")
     p.set_defaults(func=gmail_modify)
+
+    p = gmail_sub.add_parser("create-label")
+    p.add_argument("name", help="Label name to create")
+    p.set_defaults(func=gmail_create_label)
 
     # --- Calendar ---
     cal = sub.add_parser("calendar")
